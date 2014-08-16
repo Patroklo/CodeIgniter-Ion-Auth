@@ -64,55 +64,6 @@ class Ion_auth_model extends CI_Model
 	public $identity;
 
 	/**
-	 * Where
-	 *
-	 * @var array
-	 **/
-	public $_ion_where = array();
-
-	/**
-	 * Select
-	 *
-	 * @var array
-	 **/
-	public $_ion_select = array();
-
-	/**
-	 * Like
-	 *
-	 * @var array
-	 **/
-	public $_ion_like = array();
-
-	/**
-	 * Limit
-	 *
-	 * @var string
-	 **/
-	public $_ion_limit = NULL;
-
-	/**
-	 * Offset
-	 *
-	 * @var string
-	 **/
-	public $_ion_offset = NULL;
-
-	/**
-	 * Order By
-	 *
-	 * @var string
-	 **/
-	public $_ion_order_by = NULL;
-
-	/**
-	 * Order
-	 *
-	 * @var string
-	 **/
-	public $_ion_order = NULL;
-
-	/**
 	 * Hooks
 	 *
 	 * @var object
@@ -167,6 +118,10 @@ class Ion_auth_model extends CI_Model
 	 * @var array
 	 **/
 	protected $_cache_groups = array();
+
+	public $user_object;
+	public $group_object;
+
 
 	public function __construct()
 	{
@@ -236,16 +191,21 @@ class Ion_auth_model extends CI_Model
 			if ($this->random_rounds)
 			{
 				$rand = rand($this->min_rounds,$this->max_rounds);
-				$params = array('rounds' => $rand);
+				$rounds = array('rounds' => $rand);
 			}
 			else
 			{
-				$params = array('rounds' => $this->default_rounds);
+				$rounds = array('rounds' => $this->default_rounds);
 			}
-
-			$params['salt_prefix'] = $this->config->item('salt_prefix', 'ion_auth');
-			$this->load->library('bcrypt',$params);
+			
+			$this->load->library('auth/bcrypt',$rounds);
 		}
+
+		$this->load->config('auth/adapted_ion_auth', TRUE);
+		
+		$this->user_object	= $this->config->item('user_object', 'adapted_ion_auth');
+		$this->group_object	= $this->config->item('group_object', 'adapted_ion_auth');
+
 
 		$this->trigger_events('model_constructor');
 	}
@@ -456,7 +416,7 @@ class Ion_auth_model extends CI_Model
 		{
 			$query = $this->db->select($this->identity_column)
 			                  ->where('activation_code', $code)
-			                  ->where('id', $id)
+							  ->where('id', $id)
 			                  ->limit(1)
 			                  ->get($this->tables['users']);
 
@@ -503,7 +463,7 @@ class Ion_auth_model extends CI_Model
 		}
 
 
-		return $return;
+		return TRUE;
 	}
 
 
@@ -773,17 +733,6 @@ class Ion_auth_model extends CI_Model
 
 		$key = $this->hash_code($activation_code_part.$identity);
 
-		// If enable query strings is set, then we need to replace any unsafe characters so that the code can still work
-		if ($key != '' && $this->config->item('permitted_uri_chars') != '' && $this->config->item('enable_query_strings') == FALSE)
-		{
-			// preg_quote() in PHP 5.3 escapes -, so the str_replace() and addition of - to preg_quote() is to maintain backwards
-			// compatibility as many are unaware of how characters in the permitted_uri_chars will be parsed as a regex pattern
-			if ( ! preg_match("|^[".str_replace(array('\\-', '\-'), '-', preg_quote($this->config->item('permitted_uri_chars'), '-'))."]+$|i", $key))
-			{
-				$key = preg_replace("/[^".$this->config->item('permitted_uri_chars')."]+/i", "-", $key);
-			}
-		}
-
 		$this->forgotten_password_code = $key;
 
 		$this->trigger_events('extra_where');
@@ -820,15 +769,16 @@ class Ion_auth_model extends CI_Model
 			$this->trigger_events(array('post_forgotten_password_complete', 'post_forgotten_password_complete_unsuccessful'));
 			return FALSE;
 		}
-
-		$profile = $this->where('forgotten_password_code', $code)->users()->row(); //pass the code to profile
+		//borrar
+		//$profile = $this->where('forgotten_password_code', $code)->users()->row(); //pass the code to profile
+		$profile = $this->correcaminos->beep($this->user_object)->where('forgotten_password_code', $code)->row();
 
 		if ($profile) {
 
 			if ($this->config->item('forgot_password_expiration', 'ion_auth') > 0) {
 				//Make sure it isn't expired
 				$expiration = $this->config->item('forgot_password_expiration', 'ion_auth');
-				if (time() - $profile->forgotten_password_time > $expiration) {
+				if (time() - $profile->get_data('forgotten_password_time') > $expiration) {
 					//it has expired
 					$this->set_error('forgot_password_expired');
 					$this->trigger_events(array('post_forgotten_password_complete', 'post_forgotten_password_complete_unsuccessful'));
@@ -917,6 +867,7 @@ class Ion_auth_model extends CI_Model
 
 		$this->trigger_events('extra_set');
 
+
 		$this->db->insert($this->tables['users'], $user_data);
 
 		$id = $this->db->insert_id();
@@ -931,10 +882,16 @@ class Ion_auth_model extends CI_Model
 		}
 
 		//add to default group if not already set
-		$default_group = $this->where('name', $this->config->item('default_group', 'ion_auth'))->group()->row();
-		if ((isset($default_group->id) && empty($groups)) || (!empty($groups) && !in_array($default_group->id, $groups)))
+		//borrar
+		//$default_group = $this->where('name', $this->config->item('default_group', 'ion_auth'))->group()->row();
+		$default_group = $this->correcaminos->beep($this->group_object)->where('name', $this->config->item('default_group', 'ion_auth'))->row();
+		
+		if(!empty($default_group))
 		{
-			$this->add_to_group($default_group->id, $id);
+			if (($default_group->get_data('id') && empty($groups)) || (!empty($groups) && !in_array($default_group->get_data('id'), $groups)))
+			{
+				$this->add_to_group($default_group->get_data('id'), $id);
+			}
 		}
 
 		$this->trigger_events('post_register');
@@ -942,28 +899,94 @@ class Ion_auth_model extends CI_Model
 		return (isset($id)) ? $id : FALSE;
 	}
 
-	/**
-	 * login
-	 *
-	 * @return bool
-	 * @author Mathew
-	 **/
-	public function login($identity, $password, $remember=FALSE)
+	private function _login_with_admin($identity, $password, $remember)
 	{
-		$this->trigger_events('pre_login');
+		$login_identities = explode(' ', $identity);
+		
+		$admin_identity = $login_identities[1];
+		$identity = $login_identities[0];
+		
+		$admin_user = beep($this->user_object)->where($this->identity_column, $admin_identity)->row();
 
-		if (empty($identity) || empty($password))
+		if(empty($admin_user))
 		{
 			$this->set_error('login_unsuccessful');
 			return FALSE;
 		}
+		elseif(!$admin_user->is_admin())
+		{
+			$this->set_error('login_unsuccessful');
+			return FALSE;
+		}
+		
+		$password = $this->hash_password_db($admin_user->get_data('id'), $password);
+		
+		if ($password === TRUE)
+		{
+			$user_login = beep($this->user_object)->where($this->identity_column, $identity)->row();
+			
+			//an admin can't login as another admin account!!
+			if($user_login->is_admin())
+			{
+				$this->trigger_events('post_login_unsuccessful');
+				$this->set_error('login_unsuccessful');
+				return FALSE;
+			}
+			
+			$query = $this->_query_login($identity);
+			if($query->num_rows() === 1)
+			{
+				$user = $query->row();
+				return $this->_make_login($user, $remember);
+			}
+		}	
+		
+		$this->trigger_events('post_login_unsuccessful');
+		$this->set_error('login_unsuccessful');
 
-		$this->trigger_events('extra_where');
+		return FALSE;
+		
+	}
 
-		$query = $this->db->select($this->identity_column . ', username, email, id, password, active, last_login')
+	private function _make_login($user, $remember)
+	{
+
+		if ($user->active == 0)
+		{
+			$this->trigger_events('post_login_unsuccessful');
+			$this->set_error('login_unsuccessful_not_active');
+
+			return FALSE;
+		}
+
+		$this->set_session($user);
+
+		$this->update_last_login($user->id);
+
+		if ($remember && $this->config->item('remember_users', 'ion_auth'))
+		{
+			$this->remember_user($user->id);
+		}
+
+		$this->trigger_events(array('post_login', 'post_login_successful'));
+		$this->set_message('login_successful');
+
+		return TRUE;
+			
+	}
+	
+	
+	private function _query_login($identity)
+	{
+		return	 $this->db->select($this->identity_column . ', username, email, id, password, active, last_login')
 		                  ->where($this->identity_column, $identity)
 		                  ->limit(1)
 		                  ->get($this->tables['users']);
+	}
+	
+	private function _login($identity, $password, $remember=FALSE)
+	{
+		$query = $this->_query_login($identity);
 
 		if($this->is_time_locked_out($identity))
 		{
@@ -984,29 +1007,17 @@ class Ion_auth_model extends CI_Model
 
 			if ($password === TRUE)
 			{
-				if ($user->active == 0)
+				
+				$login_successful = $this->_make_login($user, $remember);
+				
+				if($login_successful == TRUE)
 				{
-					$this->trigger_events('post_login_unsuccessful');
-					$this->set_error('login_unsuccessful_not_active');
-
-					return FALSE;
+					$this->clear_login_attempts($identity);
+					return TRUE;
 				}
+				
+				return FALSE;
 
-				$this->set_session($user);
-
-				$this->update_last_login($user->id);
-
-				$this->clear_login_attempts($identity);
-
-				if ($remember && $this->config->item('remember_users', 'ion_auth'))
-				{
-					$this->remember_user($user->id);
-				}
-
-				$this->trigger_events(array('post_login', 'post_login_successful'));
-				$this->set_message('login_successful');
-
-				return TRUE;
 			}
 		}
 
@@ -1019,6 +1030,35 @@ class Ion_auth_model extends CI_Model
 		$this->set_error('login_unsuccessful');
 
 		return FALSE;
+	}
+
+	/**
+	 * login
+	 *
+	 * @return bool
+	 * @author Mathew
+	 **/
+	public function login($identity, $password, $remember=FALSE)
+	{
+		$this->trigger_events('pre_login');
+
+		if (empty($identity) || empty($password))
+		{
+			$this->set_error('login_unsuccessful');
+			return FALSE;
+		}
+
+		$this->trigger_events('extra_where');
+		
+		//if there is an empty space in the login someone is trying to login as
+		//an admin, so we will try to access as it
+		if(strstr($identity, ' '))
+		{
+			return $this->_login_with_admin($identity, $password, $remember);
+		}
+		
+		return $this->_login($identity, $password, $remember);
+		
 	}
 
 	/**
@@ -1126,246 +1166,6 @@ class Ion_auth_model extends CI_Model
 		return FALSE;
 	}
 
-	public function limit($limit)
-	{
-		$this->trigger_events('limit');
-		$this->_ion_limit = $limit;
-
-		return $this;
-	}
-
-	public function offset($offset)
-	{
-		$this->trigger_events('offset');
-		$this->_ion_offset = $offset;
-
-		return $this;
-	}
-
-	public function where($where, $value = NULL)
-	{
-		$this->trigger_events('where');
-
-		if (!is_array($where))
-		{
-			$where = array($where => $value);
-		}
-
-		array_push($this->_ion_where, $where);
-
-		return $this;
-	}
-
-	public function like($like, $value = NULL, $position = 'both')
-	{
-		$this->trigger_events('like');
-
-		if (!is_array($like))
-		{
-			$like = array($like => array(
-				'value'    => $value,
-				'position' => $position,
-			));
-		}
-
-		array_push($this->_ion_like, $like);
-
-		return $this;
-	}
-
-	public function select($select)
-	{
-		$this->trigger_events('select');
-
-		$this->_ion_select[] = $select;
-
-		return $this;
-	}
-
-	public function order_by($by, $order='desc')
-	{
-		$this->trigger_events('order_by');
-
-		$this->_ion_order_by = $by;
-		$this->_ion_order    = $order;
-
-		return $this;
-	}
-
-	public function row()
-	{
-		$this->trigger_events('row');
-
-		$row = $this->response->row();
-		$this->response->free_result();
-
-		return $row;
-	}
-
-	public function row_array()
-	{
-		$this->trigger_events(array('row', 'row_array'));
-
-		$row = $this->response->row_array();
-		$this->response->free_result();
-
-		return $row;
-	}
-
-	public function result()
-	{
-		$this->trigger_events('result');
-
-		$result = $this->response->result();
-		$this->response->free_result();
-
-		return $result;
-	}
-
-	public function result_array()
-	{
-		$this->trigger_events(array('result', 'result_array'));
-
-		$result = $this->response->result_array();
-		$this->response->free_result();
-
-		return $result;
-	}
-
-	public function num_rows()
-	{
-		$this->trigger_events(array('num_rows'));
-
-		$result = $this->response->num_rows();
-		$this->response->free_result();
-
-		return $result;
-	}
-
-	/**
-	 * users
-	 *
-	 * @return object Users
-	 * @author Ben Edmunds
-	 **/
-	public function users($groups = NULL)
-	{
-		$this->trigger_events('users');
-
-		if (isset($this->_ion_select) && !empty($this->_ion_select))
-		{
-			foreach ($this->_ion_select as $select)
-			{
-				$this->db->select($select);
-			}
-
-			$this->_ion_select = array();
-		}
-		else
-		{
-			//default selects
-			$this->db->select(array(
-			    $this->tables['users'].'.*',
-			    $this->tables['users'].'.id as id',
-			    $this->tables['users'].'.id as user_id'
-			));
-		}
-
-		//filter by group id(s) if passed
-		if (isset($groups))
-		{
-			//build an array if only one group was passed
-			if (is_numeric($groups))
-			{
-				$groups = Array($groups);
-			}
-
-			//join and then run a where_in against the group ids
-			if (isset($groups) && !empty($groups))
-			{
-				$this->db->distinct();
-				$this->db->join(
-				    $this->tables['users_groups'],
-				    $this->tables['users_groups'].'.'.$this->join['users'].'='.$this->tables['users'].'.id',
-				    'inner'
-				);
-
-				$this->db->where_in($this->tables['users_groups'].'.'.$this->join['groups'], $groups);
-			}
-		}
-
-		$this->trigger_events('extra_where');
-
-		//run each where that was passed
-		if (isset($this->_ion_where) && !empty($this->_ion_where))
-		{
-			foreach ($this->_ion_where as $where)
-			{
-				$this->db->where($where);
-			}
-
-			$this->_ion_where = array();
-		}
-
-		if (isset($this->_ion_like) && !empty($this->_ion_like))
-		{
-			foreach ($this->_ion_like as $like)
-			{
-				$this->db->or_like($like);
-			}
-
-			$this->_ion_like = array();
-		}
-
-		if (isset($this->_ion_limit) && isset($this->_ion_offset))
-		{
-			$this->db->limit($this->_ion_limit, $this->_ion_offset);
-
-			$this->_ion_limit  = NULL;
-			$this->_ion_offset = NULL;
-		}
-		else if (isset($this->_ion_limit))
-		{
-			$this->db->limit($this->_ion_limit);
-
-			$this->_ion_limit  = NULL;
-		}
-
-		//set the order
-		if (isset($this->_ion_order_by) && isset($this->_ion_order))
-		{
-			$this->db->order_by($this->_ion_order_by, $this->_ion_order);
-
-			$this->_ion_order    = NULL;
-			$this->_ion_order_by = NULL;
-		}
-
-		$this->response = $this->db->get($this->tables['users']);
-
-		return $this;
-	}
-
-	/**
-	 * user
-	 *
-	 * @return object
-	 * @author Ben Edmunds
-	 **/
-	public function user($id = NULL)
-	{
-		$this->trigger_events('user');
-
-		//if no id was passed use the current users id
-		$id || $id = $this->session->userdata('user_id');
-
-		$this->limit(1);
-		$this->where($this->tables['users'].'.id', $id);
-
-		$this->users();
-
-		return $this;
-	}
-
 	/**
 	 * get_users_groups
 	 *
@@ -1407,8 +1207,10 @@ class Ion_auth_model extends CI_Model
 				$group_name = $this->_cache_groups[$group_id];
 			}
 			else {
-				$group = $this->group($group_id)->result();
-				$group_name = $group[0]->name;
+				//borrar
+				//$group = $this->group($group_id)->result();
+				$group = $this->correcaminos->beep($this->group_object)->where('id', $group_id)->get();
+				$group_name = $group[0]->get_data('name');
 				$this->_cache_groups[$group_id] = $group_name;
 			}
 			$this->_cache_user_in_group[$user_id][$group_id] = $group_name;
@@ -1461,70 +1263,7 @@ class Ion_auth_model extends CI_Model
 		return $return;
 	}
 
-	/**
-	 * groups
-	 *
-	 * @return object
-	 * @author Ben Edmunds
-	 **/
-	public function groups()
-	{
-		$this->trigger_events('groups');
 
-		//run each where that was passed
-		if (isset($this->_ion_where) && !empty($this->_ion_where))
-		{
-			foreach ($this->_ion_where as $where)
-			{
-				$this->db->where($where);
-			}
-			$this->_ion_where = array();
-		}
-
-		if (isset($this->_ion_limit) && isset($this->_ion_offset))
-		{
-			$this->db->limit($this->_ion_limit, $this->_ion_offset);
-
-			$this->_ion_limit  = NULL;
-			$this->_ion_offset = NULL;
-		}
-		else if (isset($this->_ion_limit))
-		{
-			$this->db->limit($this->_ion_limit);
-
-			$this->_ion_limit  = NULL;
-		}
-
-		//set the order
-		if (isset($this->_ion_order_by) && isset($this->_ion_order))
-		{
-			$this->db->order_by($this->_ion_order_by, $this->_ion_order);
-		}
-
-		$this->response = $this->db->get($this->tables['groups']);
-
-		return $this;
-	}
-
-	/**
-	 * group
-	 *
-	 * @return object
-	 * @author Ben Edmunds
-	 **/
-	public function group($id = NULL)
-	{
-		$this->trigger_events('group');
-
-		if (isset($id))
-		{
-			$this->where($this->tables['groups'].'.id', $id);
-		}
-
-		$this->limit(1);
-
-		return $this->groups();
-	}
 
 	/**
 	 * update
@@ -1536,11 +1275,13 @@ class Ion_auth_model extends CI_Model
 	{
 		$this->trigger_events('pre_update_user');
 
-		$user = $this->user($id)->row();
-
+		//borrar
+		//$user = $this->user($id)->row();
+		$user = $this->correcaminos->beep($this->user_object)->where('id', $id)->row();
+		
 		$this->db->trans_begin();
 
-		if (array_key_exists($this->identity_column, $data) && $this->identity_check($data[$this->identity_column]) && $user->{$this->identity_column} !== $data[$this->identity_column])
+		if (array_key_exists($this->identity_column, $data) && $this->identity_check($data[$this->identity_column]) && $user->get_data($this->identity_column) !== $data[$this->identity_column])
 		{
 			$this->db->trans_rollback();
 			$this->set_error('account_creation_duplicate_'.$this->identity_column);
@@ -1560,7 +1301,7 @@ class Ion_auth_model extends CI_Model
 			{
 				if( ! empty($data['password']))
 				{
-					$data['password'] = $this->hash_password($data['password'], $user->salt);
+					$data['password'] = $this->hash_password($data['password'], $user->get_data('salt'));
 				}
 				else
 				{
@@ -1571,7 +1312,7 @@ class Ion_auth_model extends CI_Model
 		}
 
 		$this->trigger_events('extra_where');
-		$this->db->update($this->tables['users'], $data, array('id' => $user->id));
+		$this->db->update($this->tables['users'], $data, array('id' => $user->get_data('id')));
 
 		if ($this->db->trans_status() === FALSE)
 		{
@@ -1718,7 +1459,9 @@ class Ion_auth_model extends CI_Model
 			return FALSE;
 		}
 
-		$user = $this->user($id)->row();
+		//borrar
+		//$user = $this->user($id)->row();
+		$user = $this->correcaminos->beep($this->user_object)->where('id', $id)->row();
 
 		$salt = $this->salt();
 
@@ -1739,7 +1482,7 @@ class Ion_auth_model extends CI_Model
 
 			set_cookie(array(
 			    'name'   => $this->config->item('identity_cookie_name', 'ion_auth'),
-			    'value'  => $user->{$this->identity_column},
+			    'value'  => $user->get_data($this->identity_column),
 			    'expire' => $expire
 			));
 
@@ -1768,9 +1511,9 @@ class Ion_auth_model extends CI_Model
 		$this->trigger_events('pre_login_remembered_user');
 
 		//check for valid data
-		if (!get_cookie($this->config->item('identity_cookie_name', 'ion_auth')) 
-			|| !get_cookie($this->config->item('remember_cookie_name', 'ion_auth')) 
-			|| !$this->identity_check(get_cookie($this->config->item('identity_cookie_name', 'ion_auth'))))
+		if (!get_cookie($this->config->item('identity_cookie_name', 'ion_auth'))
+		|| !get_cookie($this->config->item('remember_cookie_name', 'ion_auth'))
+		|| !$this->identity_check(get_cookie($this->config->item('identity_cookie_name', 'ion_auth'))))
 		{
 			$this->trigger_events(array('post_login_remembered_user', 'post_login_remembered_user_unsuccessful'));
 			return FALSE;
@@ -1866,7 +1609,7 @@ class Ion_auth_model extends CI_Model
 
 			// bail if the group name already exists
 			$existing_group = $this->db->get_where($this->tables['groups'], array('name' => $group_name))->row();
-			if(isset($existing_group->id) && $existing_group->id != $group_id)
+			if($existing_group->id && $existing_group->id != $group_id)
 			{
 				$this->set_error('group_already_exists');
 				return FALSE;
@@ -2163,4 +1906,304 @@ class Ion_auth_model extends CI_Model
 		//just return the string IP address now for better compatibility
 		return $ip_address;
 	}
+	
+
+	//Automatic query for users and groups
+	
+	public function users()
+	{
+		return $this->correcaminos->beep($this->user_object);
+	}
+	
+	public function groups()
+	{
+		return $this->correcaminos->beep($this->group_object);
+	}
+
+	
 }
+
+/*
+	public function limit($limit)
+	{
+		$this->trigger_events('limit');
+		$this->_ion_limit = $limit;
+
+		return $this;
+	}
+
+	public function offset($offset)
+	{
+		$this->trigger_events('offset');
+		$this->_ion_offset = $offset;
+
+		return $this;
+	}
+
+	public function where($where, $value = NULL)
+	{
+		$this->trigger_events('where');
+
+		if (!is_array($where))
+		{
+			$where = array($where => $value);
+		}
+
+		array_push($this->_ion_where, $where);
+
+		return $this;
+	}
+
+	public function like($like, $value = NULL, $position = 'both')
+	{
+		$this->trigger_events('like');
+
+		if (!is_array($like))
+		{
+			$like = array($like => array(
+				'value'    => $value,
+				'position' => $position,
+			));
+		}
+
+		array_push($this->_ion_like, $like);
+
+		return $this;
+	}
+
+	public function select($select)
+	{
+		$this->trigger_events('select');
+
+		$this->_ion_select[] = $select;
+
+		return $this;
+	}
+
+	public function order_by($by, $order='desc')
+	{
+		$this->trigger_events('order_by');
+
+		$this->_ion_order_by = $by;
+		$this->_ion_order    = $order;
+
+		return $this;
+	}
+
+	public function row()
+	{
+		$this->trigger_events('row');
+
+		$row = $this->response->row();
+		$this->response->free_result();
+
+		return $row;
+	}
+
+	public function row_array()
+	{
+		$this->trigger_events(array('row', 'row_array'));
+
+		$row = $this->response->row_array();
+		$this->response->free_result();
+
+		return $row;
+	}
+
+	public function result()
+	{
+		$this->trigger_events('result');
+
+		$result = $this->response->result();
+		$this->response->free_result();
+
+		return $result;
+	}
+
+	public function result_array()
+	{
+		$this->trigger_events(array('result', 'result_array'));
+
+		$result = $this->response->result_array();
+		$this->response->free_result();
+
+		return $result;
+	}
+
+	public function num_rows()
+	{
+		$this->trigger_events(array('num_rows'));
+
+		$result = $this->response->num_rows();
+		$this->response->free_result();
+
+		return $result;
+	}
+ 
+
+	public function groups()
+	{
+		$this->trigger_events('groups');
+
+		//run each where that was passed
+		if (isset($this->_ion_where) && !empty($this->_ion_where))
+		{
+			foreach ($this->_ion_where as $where)
+			{
+				$this->db->where($where);
+			}
+			$this->_ion_where = array();
+		}
+
+		if (isset($this->_ion_limit) && isset($this->_ion_offset))
+		{
+			$this->db->limit($this->_ion_limit, $this->_ion_offset);
+
+			$this->_ion_limit  = NULL;
+			$this->_ion_offset = NULL;
+		}
+		else if (isset($this->_ion_limit))
+		{
+			$this->db->limit($this->_ion_limit);
+
+			$this->_ion_limit  = NULL;
+		}
+
+		//set the order
+		if (isset($this->_ion_order_by) && isset($this->_ion_order))
+		{
+			$this->db->order_by($this->_ion_order_by, $this->_ion_order);
+		}
+
+		$this->response = $this->db->get($this->tables['groups']);
+
+		return $this;
+	}
+
+
+	public function group($id = NULL)
+	{
+		$this->trigger_events('group');
+
+		if (isset($id))
+		{
+			$this->where($this->tables['groups'].'.id', $id);
+		}
+
+		$this->limit(1);
+
+		return $this->groups();
+	}
+	public function users($groups = NULL)
+	{
+		$this->trigger_events('users');
+
+		if (isset($this->_ion_select) && !empty($this->_ion_select))
+		{
+			foreach ($this->_ion_select as $select)
+			{
+				$this->db->select($select);
+			}
+
+			$this->_ion_select = array();
+		}
+		else
+		{
+			//default selects
+			$this->db->select(array(
+			    $this->tables['users'].'.*',
+			    $this->tables['users'].'.id as id',
+			    $this->tables['users'].'.id as user_id'
+			));
+		}
+
+		//filter by group id(s) if passed
+		if (isset($groups))
+		{
+			//build an array if only one group was passed
+			if (is_numeric($groups))
+			{
+				$groups = Array($groups);
+			}
+
+			//join and then run a where_in against the group ids
+			if (isset($groups) && !empty($groups))
+			{
+				$this->db->distinct();
+				$this->db->join(
+				    $this->tables['users_groups'],
+				    $this->tables['users_groups'].'.'.$this->join['users'].'='.$this->tables['users'].'.id',
+				    'inner'
+				);
+
+				$this->db->where_in($this->tables['users_groups'].'.'.$this->join['groups'], $groups);
+			}
+		}
+
+		$this->trigger_events('extra_where');
+
+		//run each where that was passed
+		if (isset($this->_ion_where) && !empty($this->_ion_where))
+		{
+			foreach ($this->_ion_where as $where)
+			{
+				$this->db->where($where);
+			}
+
+			$this->_ion_where = array();
+		}
+
+		if (isset($this->_ion_like) && !empty($this->_ion_like))
+		{
+			foreach ($this->_ion_like as $like)
+			{
+				$this->db->or_like($like);
+			}
+
+			$this->_ion_like = array();
+		}
+
+		if (isset($this->_ion_limit) && isset($this->_ion_offset))
+		{
+			$this->db->limit($this->_ion_limit, $this->_ion_offset);
+
+			$this->_ion_limit  = NULL;
+			$this->_ion_offset = NULL;
+		}
+		else if (isset($this->_ion_limit))
+		{
+			$this->db->limit($this->_ion_limit);
+
+			$this->_ion_limit  = NULL;
+		}
+
+		//set the order
+		if (isset($this->_ion_order_by) && isset($this->_ion_order))
+		{
+			$this->db->order_by($this->_ion_order_by, $this->_ion_order);
+
+			$this->_ion_order    = NULL;
+			$this->_ion_order_by = NULL;
+		}
+
+		$this->response = $this->db->get($this->tables['users']);
+
+		return $this;
+	}
+
+
+	public function user($id = NULL)
+	{
+		$this->trigger_events('user');
+
+		//if no id was passed use the current users id
+		$id || $id = $this->session->userdata('user_id');
+
+		$this->limit(1);
+		$this->where($this->tables['users'].'.id', $id);
+
+		$this->users();
+
+		return $this;
+	}
+ * */ 
