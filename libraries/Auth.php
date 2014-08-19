@@ -14,7 +14,6 @@
 		{
 			
 			$this->load->config('auth/ion_auth', TRUE);
-			$this->load->library('email');
 			$this->lang->load('ion_auth', '', FALSE, TRUE, '', 'auth');
 			$this->load->helper('cookie');
 			$this->load->helper('language');
@@ -31,26 +30,19 @@
 			}
 	
 			$this->load->model('auth/ion_auth_model');
-	
+
+			// auto-login the user if they are remembered
+			// only enters if the session it's dead and there are
+			// cookies that hold the user data
 			
-	
-			//auto-login the user if they are remembered
 			if (!$this->logged_in() && get_cookie($this->config->item('identity_cookie_name', 'ion_auth')) && get_cookie($this->config->item('remember_cookie_name', 'ion_auth')))
 			{
 				$this->ion_auth_model->login_remembered_user();
 			}
 	
-			$email_config = $this->config->item('email_config', 'ion_auth');
-	
-			if ($this->config->item('use_ci_email', 'ion_auth') && isset($email_config) && is_array($email_config))
-			{
-				$this->email->initialize($email_config);
-			}
-	
 			$this->ion_auth_model->trigger_events('library_constructor');
 			
 			$this->_load_auth();
-			$this->_check_banned();	
 	
 			$this->load->model('auth/auth_hooks_model');
 			$this->ion_auth_model->set_hook('post_login_successful', 'load_user_data', $this->auth_hooks_model, 'post_login_successful', array());

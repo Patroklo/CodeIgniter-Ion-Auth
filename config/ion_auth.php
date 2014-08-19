@@ -88,8 +88,8 @@ $config['admin_group']                = 'admin';             // Default administ
 $config['identity']                   = 'email';             // A database column which is used to login with
 $config['min_password_length']        = 8;                   // Minimum Required Length of Password
 $config['max_password_length']        = 20;                  // Maximum Allowed Length of Password
-$config['email_activation']           = FALSE;               // Email Activation for registration
-$config['manual_activation']          = FALSE;               // Manual Activation for registration
+$config['email_activation']           = TRUE;               // Email Activation for registration
+$config['manual_activation']          = TRUE;               // Manual Activation for registration
 $config['remember_users']             = TRUE;                // Allow users to be remembered and enable auto-login
 $config['user_expire']                = 86500;               // How long to remember the user (seconds). Set to zero for no expiration
 $config['user_extend_on_login']       = FALSE;               // Extend the users cookies every time they auto-login
@@ -117,7 +117,7 @@ $config['identity_cookie_name'] = 'identity';
  | 	  'file' = Use the default CI config or use from a config file
  | 	  array  = Manually set your email config settings
  */
-$config['use_ci_email'] = FALSE; // Send Email using the builtin CI email class, if false it will return the code and the identity
+$config['use_ci_email'] = TRUE; // Send Email using the builtin CI email class, if false it will return the code and the identity
 $config['email_config'] = array(
 	'mailtype' => 'html',
 );
@@ -129,7 +129,7 @@ $config['email_config'] = array(
  | Folder where email templates are stored.
  | Default: auth/
  */
-$config['email_templates'] = 'auth/email/';
+$config['email_templates'] = 'auth/auth/email/';
 
 /*
  | -------------------------------------------------------------------------
@@ -137,7 +137,7 @@ $config['email_templates'] = 'auth/email/';
  | -------------------------------------------------------------------------
  | Default: activate.tpl.php
  */
-$config['email_activate'] = 'activate.tpl.php';
+$config['email_activate'] = 'activate_tpl.php';
 
 /*
  | -------------------------------------------------------------------------
@@ -145,7 +145,7 @@ $config['email_activate'] = 'activate.tpl.php';
  | -------------------------------------------------------------------------
  | Default: forgot_password.tpl.php
  */
-$config['email_forgot_password'] = 'forgot_password.tpl.php';
+$config['email_forgot_password'] = 'forgot_password_tpl.php';
 
 /*
  | -------------------------------------------------------------------------
@@ -153,7 +153,7 @@ $config['email_forgot_password'] = 'forgot_password.tpl.php';
  | -------------------------------------------------------------------------
  | Default: new_password.tpl.php
  */
-$config['email_forgot_password_complete'] = 'new_password.tpl.php';
+$config['email_forgot_password_complete'] = 'new_password_tpl.php';
 
 /*
  | -------------------------------------------------------------------------

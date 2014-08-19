@@ -35,13 +35,14 @@
             <?php echo form_input($password_confirm);?>
       </p>
 
-      <?php if ($this->ion_auth->is_admin()): ?>
+
+      <?php if ($this->auth->is_admin()): ?>
 
           <h3><?php echo lang('edit_user_groups_heading');?></h3>
           <?php foreach ($groups as $group):?>
               <label class="checkbox">
               <?php
-                  $gID=$group['id'];
+                  $gID=$group->get_data('id');
                   $checked = null;
                   $item = null;
                   foreach($currentGroups as $grp) {
@@ -51,15 +52,14 @@
                       }
                   }
               ?>
-              <input type="checkbox" name="groups[]" value="<?php echo $group['id'];?>"<?php echo $checked;?>>
-              <?php echo $group['name'];?>
+              <input type="checkbox" name="groups[]" value="<?php echo $group->get_data('id');?>"<?php echo $checked;?>>
+              <?php echo $group->get_data('name');?>
               </label>
           <?php endforeach?>
 
       <?php endif ?>
 
-      <?php echo form_hidden('id', $user->id);?>
-      <?php echo form_hidden($csrf); ?>
+      <?php echo form_hidden('id', $user->get_data('id'));?>
 
       <p><?php echo form_submit('submit', lang('edit_user_submit_btn'));?></p>
 
